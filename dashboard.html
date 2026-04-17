@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tableau de Bord Opérationnel — Tuyauterie</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Tahoma,sans-serif;background:#eef2f7;color:#1e2a3a;min-height:100vh}
+.top-header{background:linear-gradient(135deg,#0d47a1 0%,#1976d2 100%);color:white;padding:18px 32px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 3px 12px rgba(13,71,161,.4)}
+.top-header h1{font-size:20px;font-weight:700;letter-spacing:.5px}
+.top-header .subtitle{font-size:12px;opacity:.75;margin-top:2px}
+.date-badge{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600}
+.upload-section{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - 64px);padding:40px}
+.upload-card{background:white;border-radius:16px;padding:50px 60px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.08);max-width:500px;width:100%}
+.upload-card .icon{font-size:64px;margin-bottom:20px}
+.upload-card h2{font-size:24px;color:#1565c0;margin-bottom:10px}
+.upload-card p{color:#666;font-size:14px;margin-bottom:30px;line-height:1.7}
+.upload-drop{border:2px dashed #90caf9;border-radius:12px;padding:30px;cursor:pointer;transition:all .3s;background:#f3f8ff}
+.upload-drop:hover,.upload-drop.drag-over{border-color:#1565c0;background:#e3f2fd}
+.upload-drop p{color:#1565c0;font-weight:600;font-size:15px}
+.upload-drop small{color:#888;font-size:12px}
+#fileInput{display:none}
+.btn-upload{display:inline-block;margin-top:15px;background:#1565c0;color:white;border:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s}
+.btn-upload:hover{background:#0d47a1}
+#loadingMsg{display:none;margin-top:16px;color:#1565c0;font-weight:600}
+#errorMsg{display:none;margin-top:16px;color:#c62828;font-size:13px}
+#dashboard{display:none;padding:24px 32px}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:16px;margin-bottom:24px}
+.kpi-card{background:white;border-radius:12px;padding:20px 24px;box-shadow:0 2px 12px rgba(0,0,0,.06);border-left:4px solid #1565c0;transition:transform .2s,box-shadow .2s}
+.kpi-card:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,.1)}
+.kpi-card.green{border-left-color:#2e7d32}
+.kpi-card.orange{border-left-color:#e65100}
+.kpi-card.amber{border-left-color:#f57f17}
+.kpi-card.red{border-left-color:#c62828}
+.kpi-card .label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.8px;font-weight:600;margin-bottom:8px}
+.kpi-card .value{font-size:34px;font-weight:700;color:#1e2a3a;line-height:1}
+.kpi-card .sub{font-size:12px;color:#888;margin-top:6px}
+.global-progress-card{background:white;border-radius:12px;padding:24px 28px;box-shadow:0 2px 12px rgba(0,0,0,.06);margin-bottom:24px}
+.global-progress-card h3{font-size:13px;color:#888;text-transform:uppercase;letter-spacing:.8px;margin-bottom:16px;font-weight:600}
+.progress-bar-wrap{background:#e8edf2;border-radius:999px;height:26px;overflow:hidden}
+.progress-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#1565c0,#42a5f5);transition:width 1.2s ease;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;min-width:44px}
+.prog-labels{display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:#888}
+.section{background:white;border-radius:12px;padding:24px 28px;box-shadow:0 2px 12px rgba(0,0,0,.06);margin-bottom:24px}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;border-bottom:2px solid #f0f4f8;padding-bottom:14px}
+.section-header h2{font-size:16px;font-weight:700;color:#1e2a3a}
+.badge{background:#e3f2fd;color:#1565c0;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600}
+.badge.green{background:#e8f5e9;color:#2e7d32}
+.badge.amber{background:#fff8e1;color:#f57f17}
+.badge.red{background:#ffebee;color:#c62828}
+.table-wrap{max-height:380px;overflow-y:auto;border-radius:8px;border:1px solid #eef2f7}
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table th{background:#f5f8ff;color:#555;font-size:11px;text-transform:uppercase;letter-spacing:.6px;padding:10px 12px;text-align:left;border-bottom:2px solid #e8edf2;font-weight:600;position:sticky;top:0;z-index:1}
+.data-table td{padding:10px 12px;border-bottom:1px solid #f0f4f8;vertical-align:middle}
+.data-table tr:hover td{background:#f9fbff}
+.prog-mini-wrap{display:flex;align-items:center;gap:8px;min-width:130px}
+.prog-mini-bg{background:#e8edf2;border-radius:999px;height:8px;flex:1;overflow:hidden}
+.prog-mini-fill{height:100%;border-radius:999px}
+.prog-mini-fill.done{background:#43a047}
+.prog-mini-fill.in-progress{background:#1976d2}
+.prog-mini-fill.todo{background:#cfd8dc}
+.prog-mini-pct{font-size:11px;font-weight:700;min-width:30px;text-align:right;color:#444}
+.tag{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.tag.done{background:#e8f5e9;color:#2e7d32}
+.tag.in-progress{background:#e3f2fd;color:#1565c0}
+.tag.todo{background:#fafafa;color:#888;border:1px solid #ddd}
+.tag.blocked{background:#fff3e0;color:#e65100}
+.tabs{display:flex;gap:4px;margin-bottom:0}
+.tab-btn{padding:8px 18px;border:none;background:#f0f4f8;border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;color:#666;transition:all .2s;border:1px solid #e0e7ef;border-bottom:none}
+.tab-btn.active{background:white;color:#1565c0}
+.tab-content{display:none}
+.tab-content.active{display:block}
+.tab-content .table-wrap{border-radius:0 8px 8px 8px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}
+.chart-wrap{position:relative;height:290px}
+.empty-state{text-align:center;padding:40px;color:#aaa}
+.empty-state .icon{font-size:36px;margin-bottom:10px}
+.empty-state p{font-size:13px}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#f0f4f8}
+::-webkit-scrollbar-thumb{background:#b0c4d8;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#8aaec8}
+@media(max-width:900px){.two-col{grid-template-columns:1fr}#dashboard{padding:16px}.upload-card{padding:30px 20px}}
+</style>
+</head>
+<body>
+<div class="top-header">
+  <div>
+    <h1>📊 Tableau de Bord Opérationnel — Tuyauterie</h1>
+    <div class="subtitle">Suivi avancement Soudure &amp; Cintrage · Export MS Project</div>
+  </div>
+  <div class="date-badge" id="headerDate"></div>
+</div>
+
+<div class="upload-section" id="uploadSection">
+  <div class="upload-card">
+    <div class="icon">📂</div>
+    <h2>Charger votre fichier Excel</h2>
+    <p>Glissez-déposez votre fichier <strong>Export_MSProject.xlsx</strong><br>
+       La feuille <strong>Export_MSProject</strong> sera lue automatiquement.<br>
+       <em>Colonne J = Avancement</em></p>
+    <div class="upload-drop" id="dropZone">
+      <p>📥 Glisser-déposer ici</p>
+      <small>ou cliquez pour parcourir</small>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm">
+      <br>
+      <button class="btn-upload" onclick="document.getElementById('fileInput').click()">📂 Choisir un fichier</button>
+    </div>
+    <div id="loadingMsg">⏳ Chargement en cours...</div>
+    <div id="errorMsg"></div>
+  </div>
+</div>
+
+<div id="dashboard">
+  <div class="kpi-grid" id="kpiGrid"></div>
+  <div class="global-progress-card">
+    <h3>🏁 Avancement Global du Projet</h3>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="globalBar" style="width:0%">0%</div>
+    </div>
+    <div class="prog-labels">
+      <span id="progL1"></span>
+      <span id="progL2"></span>
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="section">
+      <div class="section-header">
+        <h2>🎯 Priorités de la Semaine</h2>
+        <span class="badge amber" id="badgePrio">0</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Tâche</th><th>Tronçon</th><th>Ressource</th><th>Avancement</th></tr></thead>
+          <tbody id="tblPrio"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-header">
+        <h2>👷 Charge par Ressource</h2>
+        <span class="badge" id="badgeRes">0 ressources</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chartRes"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-header">
+      <h2>✅ Ce qui a été fait</h2>
+      <span class="badge green" id="badgeDone">0 tâches</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Batch</th><th>MIP</th><th>Tronçon</th><th>Tâche</th><th>Ressource</th><th>Statut</th></tr></thead>
+        <tbody id="tblDone"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-header">
+      <h2>🔄 En cours</h2>
+      <span class="badge" id="badgeInProg">0 tâches</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Batch</th><th>MIP</th><th>Tronçon</th><th>Tâche</th><th>Ressource</th><th>Avancement</th></tr></thead>
+        <tbody id="tblInProg"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-header">
+      <h2>⏳ Reste à faire</h2>
+      <span class="badge red" id="badgeTodo">0 tâches</span>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab(event,'pret')">✅ Prêt à démarrer</button>
+      <button class="tab-btn" onclick="switchTab(event,'bloque')">🔒 En attente</button>
+    </div>
+    <div class="tab-content active" id="tab-pret">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Batch</th><th>MIP</th><th>Tronçon</th><th>Tâche</th><th>Ressource</th><th>Durée</th></tr></thead>
+          <tbody id="tblReady"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="tab-content" id="tab-bloque">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Batch</th><th>MIP</th><th>Tronçon</th><th>Tâche</th><th>Ressource</th><th>Statut</th></tr></thead>
+          <tbody id="tblBlocked"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-header">
+      <h2>📋 Détail par Batch / MIP</h2>
+      <span class="badge" id="badgeBatch">0</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr>
+          <th>Batch / MIP</th>
+          <th style="text-align:center">Tronçons</th>
+          <th style="text-align:center">✅ Terminés</th>
+          <th style="text-align:center">🔄 En cours</th>
+          <th style="text-align:center">⏳ À faire</th>
+          <th>Avancement</th>
+        </tr></thead>
+        <tbody id="tblBatch"></tbody>
+      </table>
+    </div>
+  </div>
+  <div style="text-align:center;color:#aaa;font-size:12px;padding:10px 0 40px">
+    Tableau de bord généré automatiquement · Données : Export_MSProject.xlsx · Colonne Avancement : J
+  </div>
+</div>
+
+<script>
+(function(){
+  const d=new Date();
+  document.getElementById('headerDate').textContent=d.toLocaleDateString('fr-FR',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+})();
+
+function parseAv(v){
+  if(v===null||v===undefined||v==='') return 0;
+  if(typeof v==='number') return v<=1?Math.round(v*100):Math.round(v);
+  const s=String(v).replace('%','').replace(',','.').trim();
+  const n=parseFloat(s);
+  if(isNaN(n)) return 0;
+  return n<=1?Math.round(n*100):Math.round(n);
+}
+function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function progMini(pct){
+  const cls=pct>=100?'done':pct>0?'in-progress':'todo';
+  return `<div class="prog-mini-wrap"><div class="prog-mini-bg"><div class="prog-mini-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div><span class="prog-mini-pct">${pct}%</span></div>`;
+}
+function emptyState(msg){return `<tr><td colspan="6"><div class="empty-state"><div class="icon">📭</div><p>${msg}</p></div></td></tr>`;}
+function findCol(headers,names,fallback){
+  for(const n of names){const i=headers.findIndex(h=>h.toLowerCase().includes(n.toLowerCase()));if(i>=0)return i;}
+  return fallback;
+}
+
+const dropZone=document.getElementById('dropZone');
+const fileInput=document.getElementById('fileInput');
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);});
+fileInput.addEventListener('change',()=>{if(fileInput.files[0])processFile(fileInput.files[0]);});
+
+function showError(msg){
+  document.getElementById('errorMsg').textContent='⚠️ '+msg;
+  document.getElementById('errorMsg').style.display='block';
+  document.getElementById('loadingMsg').style.display='none';
+}
+
+function processFile(file){
+  document.getElementById('loadingMsg').style.display='block';
+  document.getElementById('errorMsg').style.display='none';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+      let sn=wb.SheetNames.find(n=>n.toLowerCase().includes('export')||n.toLowerCase().includes('project'));
+      if(!sn)sn=wb.SheetNames[0];
+      const ws=wb.Sheets[sn];
+      const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(!data||data.length<2){showError('Feuille vide ou format non reconnu.');return;}
+      buildDashboard(data);
+    }catch(err){showError('Erreur de lecture : '+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function buildDashboard(data){
+  const headers=data[0].map(h=>String(h||'').trim());
+  const COL={
+    ID:findCol(headers,['id'],0),
+    OUTLINE:findCol(headers,['outline','niveau'],1),
+    TASK:findCol(headers,['task name','tâche','nom'],2),
+    DUR:findCol(headers,['duration','durée'],3),
+    RES:findCol(headers,['ressource','noms ressources'],4),
+    TYPE:findCol(headers,['type'],6),
+    PRED:findCol(headers,['pred'],7),
+    AV:findCol(headers,['avancement','%complet','progress'],9),
+  };
+  COL.BATCH=findCol(headers,['batch','lot'],54);
+  COL.MIP=findCol(headers,['mip','ref mip'],52);
+  COL.LIGNE=findCol(headers,['ligne'],16);
+  COL.TRONC=findCol(headers,['tronçon','troncon'],30);
+
+  const rows=[];
+  for(let i=1;i<data.length;i++){ 
+    const r=data[i];
+    if(!r||r.every(c=>c===''))continue;
+    const outline=parseInt(r[COL.OUTLINE])||0;
+    const task=String(r[COL.TASK]||'').trim();
+    if(!task)continue;
+    rows.push({id:r[COL.ID],outline,task,dur:r[COL.DUR],res:String(r[COL.RES]||'').trim(),type:String(r[COL.TYPE]||'').trim(),pred:String(r[COL.PRED]||'').trim(),av:parseAv(r[COL.AV]),batch:String(r[COL.BATCH]||'').trim(),mip:String(r[COL.MIP]||'').trim(),ligne:String(r[COL.LIGNE]||'').trim(),troncon:String(r[COL.TRONC]||'').trim(),ri:i});
+  }
+
+  let cBatch='',cMIP='',cLigne='',cTronc='';
+  for(const row of rows){
+    if(row.outline===1){cBatch=row.task;cMIP='';cLigne='';cTronc='';}
+    else if(row.outline===2){cMIP=row.task;cLigne='';cTronc='';}
+    else if(row.outline===3){cLigne=row.task;cTronc='';}
+    else if(row.outline===4){cTronc=row.task;}
+    if(!row.batch)row.batch=cBatch;
+    if(!row.mip)row.mip=cMIP;
+    if(!row.ligne)row.ligne=cLigne;
+    if(row.outline===5&&!row.troncon)row.troncon=cTronc;
+    if(row.outline===4)row.troncon=row.task;
+  }
+
+  const idMap={};
+  rows.forEach(r=>{if(r.id!=='')idMap[String(r.id)]=r;});
+  const tasks=rows.filter(r=>r.outline===5);
+  const troncons=rows.filter(r=>r.outline===4);
+
+  const tMap={};
+  tasks.forEach(t=>{const k=t.batch+'||'+t.mip+'||'+t.troncon;if(!tMap[k])tMap[k]=[];tMap[k].push(t);});
+  troncons.forEach(tr=>{const k=tr.batch+'||'+tr.mip+'||'+tr.troncon;const kids=tMap[k]||[];tr.computedAv=kids.length>0?Math.round(kids.reduce((s,k)=>s+k.av,0)/kids.length):tr.av;});
+
+  const total=tasks.length;
+  const done=tasks.filter(t=>t.av>=100).length;
+  const inprog=tasks.filter(t=>t.av>0&&t.av<100).length;
+  const todo=tasks.filter(t=>t.av===0).length;
+  const tDone=troncons.filter(t=>t.computedAv>=100).length;
+  const tInprog=troncons.filter(t=>t.computedAv>0&&t.computedAv<100).length;
+  const tTodo=troncons.filter(t=>t.computedAv===0).length;
+  const globalPct=total>0?Math.round(tasks.reduce((s,t)=>s+t.av,0)/total):0;
+
+  document.getElementById('kpiGrid').innerHTML=`
+    <div class="kpi-card"><div class="label">Tâches Total</div><div class="value">${total}</div><div class="sub">${troncons.length} tronçons</div></div>
+    <div class="kpi-card green"><div class="label">✅ Terminées</div><div class="value">${done}</div><div class="sub">${tDone} tronçons terminés</div></div>
+    <div class="kpi-card amber"><div class="label">🔄 En cours</div><div class="value">${inprog}</div><div class="sub">${tInprog} tronçons en cours</div></div>
+    <div class="kpi-card red"><div class="label">⏳ À faire</div><div class="value">${todo}</div><div class="sub">${tTodo} tronçons restants</div></div>
+    <div class="kpi-card orange"><div class="label">Avancement Global</div><div class="value">${globalPct}%</div><div class="sub">sur ${total} tâches</div></div>`;
+
+  const bar=document.getElementById('globalBar');
+  setTimeout(()=>{bar.style.width=globalPct+'%';bar.textContent=globalPct+'%';},100);
+  document.getElementById('progL1').textContent=`${done} tâches terminées`;
+  document.getElementById('progL2').textContent=`${todo} tâches restantes`;
+
+  const readySet=new Set();
+  tasks.forEach(t=>{if(t.av===0&&t.pred){const pids=t.pred.split(/[,;]/).map(s=>s.trim()).filter(Boolean);if(pids.every(pid=>{const pr=idMap[pid];return pr&&pr.av>=100;}))readySet.add(t.ri);}});
+
+  const prios=[...tasks.filter(t=>t.av>0&&t.av<100).sort((a,b)=>b.av-a.av),...tasks.filter(t=>t.av===0&&(readySet.has(t.ri)||!t.pred))].slice(0,25);
+  document.getElementById('badgePrio').textContent=prios.length;
+  document.getElementById('tblPrio').innerHTML=prios.length===0?emptyState('Aucune priorité identifiée'):prios.map(t=>`<tr><td><strong>${esc(t.task)}</strong></td><td>${esc(t.troncon)}</td><td>${esc(t.res)}</td><td>${progMini(t.av)}</td></tr>`).join('');
+
+  const rg={};
+  tasks.forEach(t=>{const r=t.res||'Non assigné';if(!rg[r])rg[r]={done:0,inprog:0,todo:0};if(t.av>=100)rg[r].done++;else if(t.av>0)rg[r].inprog++;else rg[r].todo++;});
+  const rLabels=Object.keys(rg).filter(r=>r&&r!=='Non assigné').slice(0,10);
+  document.getElementById('badgeRes').textContent=rLabels.length+' ressources';
+  const ctx=document.getElementById('chartRes').getContext('2d');
+  if(window._chartR)window._chartR.destroy();
+  window._chartR=new Chart(ctx,{type:'bar',data:{labels:rLabels,datasets:[{label:'Terminé',data:rLabels.map(r=>rg[r].done),backgroundColor:'#43a047'},{label:'En cours',data:rLabels.map(r=>rg[r].inprog),backgroundColor:'#1976d2'},{label:'À faire',data:rLabels.map(r=>rg[r].todo),backgroundColor:'#cfd8dc'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10}}}}}});
+
+  const doneList=tasks.filter(t=>t.av>=100);
+  document.getElementById('badgeDone').textContent=doneList.length+' tâches';
+  document.getElementById('tblDone').innerHTML=doneList.length===0?emptyState("Aucune tâche terminée pour l'instant"):doneList.map(t=>`<tr><td>${esc(t.batch)}</td><td>${esc(t.mip)}</td><td>${esc(t.troncon)}</td><td>${esc(t.task)}</td><td>${esc(t.res)}</td><td><span class="tag done">✅ 100%</span></td></tr>`).join('');
+
+  const inprogList=tasks.filter(t=>t.av>0&&t.av<100).sort((a,b)=>b.av-a.av);
+  document.getElementById('badgeInProg').textContent=inprogList.length+' tâches';
+  document.getElementById('tblInProg').innerHTML=inprogList.length===0?emptyState('Aucune tâche en cours'):inprogList.map(t=>`<tr><td>${esc(t.batch)}</td><td>${esc(t.mip)}</td><td>${esc(t.troncon)}</td><td>${esc(t.task)}</td><td>${esc(t.res)}</td><td>${progMini(t.av)}</td></tr>`).join('');
+
+  const readyList=tasks.filter(t=>t.av===0&&(readySet.has(t.ri)||!t.pred));
+  const blockedList=tasks.filter(t=>t.av===0&&t.pred&&!readySet.has(t.ri));
+  document.getElementById('badgeTodo').textContent=(readyList.length+blockedList.length)+' tâches';
+  document.getElementById('tblReady').innerHTML=readyList.length===0?emptyState('Aucune tâche prête à démarrer'):readyList.map(t=>`<tr><td>${esc(t.batch)}</td><td>${esc(t.mip)}</td><td>${esc(t.troncon)}</td><td>${esc(t.task)}</td><td>${esc(t.res)}</td><td>${esc(t.dur)}</td></tr>`).join('');
+  document.getElementById('tblBlocked').innerHTML=blockedList.length===0?emptyState('Aucune tâche bloquée'):blockedList.map(t=>`<tr><td>${esc(t.batch)}</td><td>${esc(t.mip)}</td><td>${esc(t.troncon)}</td><td>${esc(t.task)}</td><td>${esc(t.res)}</td><td><span class="tag blocked">🔒 En attente prédécesseur</span></td></tr>`).join('');
+
+  const bg={};
+  troncons.forEach(tr=>{const k=(tr.batch||'Sans batch')+'|||'+(tr.mip||'');if(!bg[k])bg[k]={batch:tr.batch||'Sans batch',mip:tr.mip||'',total:0,done:0,ip:0,todo:0,pcts:[]};bg[k].total++;bg[k].pcts.push(tr.computedAv);if(tr.computedAv>=100)bg[k].done++;else if(tr.computedAv>0)bg[k].ip++;else bg[k].todo++;});
+  const bKeys=Object.keys(bg);
+  document.getElementById('badgeBatch').textContent=bKeys.length+' entrées';
+  document.getElementById('tblBatch').innerHTML=bKeys.map(k=>{const g=bg[k];const avg=g.pcts.length>0?Math.round(g.pcts.reduce((a,b)=>a+b,0)/g.pcts.length):0;return `<tr><td><strong>${esc(g.batch)}</strong>${g.mip?` / <span style="color:#166534">${esc(g.mip)}</span>`:''}</td><td style="text-align:center"><strong>${g.total}</strong></td><td style="text-align:center;color:#2e7d32;font-weight:700">${g.done}</td><td style="text-align:center;color:#1565c0;font-weight:700">${g.ip}</td><td style="text-align:center;color:#e65100;font-weight:700">${g.todo}</td><td style="min-width:160px">${progMini(avg)}</td></tr>`;}).join('');
+
+  document.getElementById('uploadSection').style.display='none';
+  document.getElementById('dashboard').style.display='block';
+}
+
+function switchTab(e,tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  e.target.classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+}
+</script>
+</body>
+</html>
